@@ -76,7 +76,11 @@ This makes the `apam`, `apam-mcp`, `apam-load-context`, and `apam-write-episode`
 
 ### 3. Register the MCP server with Claude Code
 
-Add the server to your Claude Code MCP config. For the **desktop app**, edit `~/.claude/claude_desktop_config.json`:
+Add the server to your Claude Code MCP config. The config file lives at:
+- **Mac/Linux:** `~/.claude/claude_desktop_config.json`
+- **Windows:** `%USERPROFILE%\.claude\claude_desktop_config.json`
+
+For the **desktop app**:
 
 ```json
 {
@@ -88,7 +92,7 @@ Add the server to your Claude Code MCP config. For the **desktop app**, edit `~/
 }
 ```
 
-For the **CLI**, add to your `~/.claude/settings.json`:
+For the **CLI** (`~/.claude/settings.json` on Mac/Linux, `%USERPROFILE%\.claude\settings.json` on Windows):
 
 ```json
 {
@@ -113,9 +117,28 @@ If you skipped `npm link`, use the full path to the built binary instead:
 }
 ```
 
-### 3. Install the APAM Superpowers skill
+### 3. Install the APAM skill plugin
 
-Copy `packages/apam-skill/skill.md` into your Superpowers skills directory (usually `~/.claude/plugins/skills/` or wherever your Superpowers installation reads skills from). The skill tells Claude the cognitive policy: when to recall, what to pin, how to write episodes.
+The skill ships as a Claude Code plugin. Register the plugin directory as a marketplace, then install from it:
+
+```bash
+# From the APAM repo root — register as a local marketplace (run once)
+claude plugin marketplace add /path/to/APAM/packages/apam-skill
+
+# Then install the plugin
+claude plugin install apam@apam
+```
+
+Replace `/path/to/APAM` with the actual path where you cloned the repo.
+
+To verify it installed:
+
+```bash
+claude plugin list
+# apam should appear in the output
+```
+
+> **Note:** The marketplace registration points at your cloned directory. If you move the repo, re-run `claude plugin marketplace add` with the new path.
 
 ### 4. Initialise for your project
 
@@ -244,6 +267,8 @@ All data is stored locally. Nothing leaves your machine.
 └── <project-id>/      # 16-char hex derived from git remote URL
     └── apam.db        # SQLite database (WAL mode)
 ```
+
+`~` is `$HOME` on Mac/Linux (`/Users/<you>` on Mac, `/home/<you>` on Linux) and `%USERPROFILE%` on Windows (`C:\Users\<you>`).
 
 Project ID derivation:
 1. SHA256 of the normalized git remote URL (strips protocol, `.git`, trailing slash) → first 16 hex chars

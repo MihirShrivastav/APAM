@@ -1,0 +1,5 @@
+{
+  "name": "apam",
+  "version": "0.1.0",
+  "description": "APAM Memory — gives Claude Code persistent, layered memory across sessions."
+}
