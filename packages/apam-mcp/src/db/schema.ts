@@ -53,5 +53,12 @@ export function runMigrations(db: Database.Database): void {
       started_at TEXT NOT NULL,
       context_loaded INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE INDEX IF NOT EXISTS idx_l1_atoms_project_id ON l1_atoms(project_id);
+    CREATE INDEX IF NOT EXISTS idx_l1_atoms_scope ON l1_atoms(scope);
+    CREATE INDEX IF NOT EXISTS idx_l2_episodes_project_id ON l2_episodes(project_id);
+    CREATE INDEX IF NOT EXISTS idx_l2_episodes_consolidated ON l2_episodes(consolidated);
+    CREATE INDEX IF NOT EXISTS idx_l3_cards_project_id ON l3_cards(project_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
   `);
 }
