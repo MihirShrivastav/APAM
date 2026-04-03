@@ -35,59 +35,36 @@ export function runConsolidation(
   if (episodes.length === 0) return { episodesProcessed: 0, cardsCreated: 0, cardsUpdated: 0 };
 
   const episodeIds = episodes.map(e => e.id);
-  const countBefore = (
-    db.prepare('SELECT COUNT(*) as c FROM l3_cards WHERE project_id = ?').get(projectId) as { c: number }
-  ).c;
+  let cardsCreated = 0;
+  let cardsUpdated = 0;
+
+  function upsertWithTracking(
+    type: L3Type,
+    title: string,
+    content: string
+  ): void {
+    const existing = getExistingCardContent(db, projectId, type, title);
+    const mergedContent = existing ? `${existing}\n${content}` : content;
+    upsertCard(db, { type, project_id: projectId, title, content: mergedContent, source_episode_ids: episodeIds });
+    if (existing) cardsUpdated++; else cardsCreated++;
+  }
 
   // Decisions → architecture card
   const allDecisions = episodes.flatMap(e => e.decisions).filter(Boolean);
   if (allDecisions.length > 0) {
-    const existingDecisionContent = getExistingCardContent(db, projectId, 'architecture', 'Key Decisions');
-    const newLines = allDecisions.map(d => `- ${d}`).join('\n');
-    const mergedContent = existingDecisionContent
-      ? `${existingDecisionContent}\n${newLines}`
-      : newLines;
-    upsertCard(db, {
-      type: 'architecture',
-      project_id: projectId,
-      title: 'Key Decisions',
-      content: mergedContent,
-      source_episode_ids: episodeIds,
-    });
+    upsertWithTracking('architecture', 'Key Decisions', allDecisions.map(d => `- ${d}`).join('\n'));
   }
 
   // Patterns → pattern card
   const allPatterns = episodes.flatMap(e => e.patterns_observed).filter(Boolean);
   if (allPatterns.length > 0) {
-    const existingPatternContent = getExistingCardContent(db, projectId, 'pattern', 'Observed Patterns');
-    const newLines = allPatterns.map(p => `- ${p}`).join('\n');
-    const mergedContent = existingPatternContent
-      ? `${existingPatternContent}\n${newLines}`
-      : newLines;
-    upsertCard(db, {
-      type: 'pattern',
-      project_id: projectId,
-      title: 'Observed Patterns',
-      content: mergedContent,
-      source_episode_ids: episodeIds,
-    });
+    upsertWithTracking('pattern', 'Observed Patterns', allPatterns.map(p => `- ${p}`).join('\n'));
   }
 
   // Problems solved → procedural card
   const allProblems = episodes.flatMap(e => e.problems_solved).filter(Boolean);
   if (allProblems.length > 0) {
-    const existingProblemContent = getExistingCardContent(db, projectId, 'procedural', 'Problems Solved');
-    const newLines = allProblems.map(p => `- ${p}`).join('\n');
-    const mergedContent = existingProblemContent
-      ? `${existingProblemContent}\n${newLines}`
-      : newLines;
-    upsertCard(db, {
-      type: 'procedural',
-      project_id: projectId,
-      title: 'Problems Solved',
-      content: mergedContent,
-      source_episode_ids: episodeIds,
-    });
+    upsertWithTracking('procedural', 'Problems Solved', allProblems.map(p => `- ${p}`).join('\n'));
   }
 
   // Frequently touched top-level directories → entity cards
@@ -107,28 +84,19 @@ export function runConsolidation(
     const relevant = episodes.filter(e => e.files_touched.some(f => f.startsWith(dir)));
     const summaries = relevant.map(e => e.summary).filter(Boolean);
     if (summaries.length > 0) {
-      upsertCard(db, {
-        type: 'entity',
-        project_id: projectId,
-        title: `Module: ${dir}`,
-        content: `Frequently modified. Recent activity:\n${summaries
-          .slice(-3)
-          .map(s => `- ${s}`)
-          .join('\n')}`,
-        source_episode_ids: relevant.map(e => e.id),
-      });
+      const title = `Module: ${dir}`;
+      const content = `Frequently modified. Recent activity:\n${summaries.slice(-3).map(s => `- ${s}`).join('\n')}`;
+      const existing = getExistingCardContent(db, projectId, 'entity', title);
+      upsertCard(db, { type: 'entity', project_id: projectId, title, content, source_episode_ids: relevant.map(e => e.id) });
+      if (existing) cardsUpdated++; else cardsCreated++;
     }
   }
 
   markConsolidated(db, episodeIds);
 
-  const countAfter = (
-    db.prepare('SELECT COUNT(*) as c FROM l3_cards WHERE project_id = ?').get(projectId) as { c: number }
-  ).c;
-
   return {
     episodesProcessed: episodes.length,
-    cardsCreated: Math.max(0, countAfter - countBefore),
-    cardsUpdated: Math.max(0, countBefore - (countBefore - (countAfter - countBefore))),
+    cardsCreated,
+    cardsUpdated,
   };
 }
