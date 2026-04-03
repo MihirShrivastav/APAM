@@ -57,19 +57,24 @@ Claude Code Session
 
 ## Installation
 
-### 1. Install the package globally
+### 1. Clone the repo and build
 
 ```bash
-npm install -g apam-mcp
+git clone https://github.com/MihirShrivastav/APAM.git
+cd APAM/packages/apam-mcp
+npm install
+npm run build
 ```
 
-Or run directly with npx (no install needed):
+### 2. Link the CLI globally
 
 ```bash
-npx apam-mcp  # starts the MCP server
+npm link
 ```
 
-### 2. Register the MCP server with Claude Code
+This makes the `apam`, `apam-mcp`, `apam-load-context`, and `apam-write-episode` binaries available on your PATH.
+
+### 3. Register the MCP server with Claude Code
 
 Add the server to your Claude Code MCP config. For the **desktop app**, edit `~/.claude/claude_desktop_config.json`:
 
@@ -77,8 +82,7 @@ Add the server to your Claude Code MCP config. For the **desktop app**, edit `~/
 {
   "mcpServers": {
     "apam": {
-      "command": "npx",
-      "args": ["apam-mcp"]
+      "command": "apam-mcp"
     }
   }
 }
@@ -90,8 +94,20 @@ For the **CLI**, add to your `~/.claude/settings.json`:
 {
   "mcpServers": {
     "apam": {
-      "command": "npx",
-      "args": ["apam-mcp"]
+      "command": "apam-mcp"
+    }
+  }
+}
+```
+
+If you skipped `npm link`, use the full path to the built binary instead:
+
+```json
+{
+  "mcpServers": {
+    "apam": {
+      "command": "node",
+      "args": ["/path/to/APAM/packages/apam-mcp/dist/server.js"]
     }
   }
 }
