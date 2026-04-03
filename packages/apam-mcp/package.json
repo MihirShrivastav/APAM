@@ -1,0 +1,31 @@
+{
+  "name": "apam-mcp",
+  "version": "0.1.0",
+  "description": "APAM Memory MCP Server for Claude Code",
+  "type": "module",
+  "bin": {
+    "apam-mcp": "./dist/server.js",
+    "apam": "./dist/cli.js",
+    "apam-load-context": "./dist/hooks/load-context.js",
+    "apam-write-episode": "./dist/hooks/write-episode.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^9.4.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
