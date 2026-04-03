@@ -3,8 +3,8 @@ import { getProjectId, getProjectLabel } from './utils/project-id.js';
 import { handleConsolidate } from './tools/consolidate.js';
 import { handleStatus } from './tools/status.js';
 import { deleteCard } from './layers/l3.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
 
 const [, , command, ...args] = process.argv;
@@ -24,7 +24,9 @@ function readSettings(): Record<string, unknown> {
 }
 
 function writeSettings(settings: Record<string, unknown>): void {
-  writeFileSync(getClaudeSettingsPath(), JSON.stringify(settings, null, 2));
+  const path = getClaudeSettingsPath();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(settings, null, 2));
 }
 
 switch (command) {

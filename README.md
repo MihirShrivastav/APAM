@@ -130,8 +130,6 @@ Claude Code Session
   L4: Your codebase + git history (Claude reads directly)
 ```
 
-Full design: [docs/superpowers/specs/2026-04-03-apam-claude-code-design.md](docs/superpowers/specs/2026-04-03-apam-claude-code-design.md)
-
 ---
 
 ## Development
@@ -143,8 +141,6 @@ npm test          # run all tests
 npm run build     # compile to dist/
 ```
 
-See [docs/superpowers/plans/2026-04-03-apam-claude-code.md](docs/superpowers/plans/2026-04-03-apam-claude-code.md)
-for the full 13-task implementation plan.
 
 ---
 
