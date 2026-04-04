@@ -7,6 +7,7 @@ import { handlePin } from './tools/pin.js';
 import { handleWriteEpisode } from './tools/write-episode.js';
 import { handleConsolidate } from './tools/consolidate.js';
 import { handleStatus } from './tools/status.js';
+import { upsertCard } from './layers/l3.js';
 
 const server = new McpServer({
   name: 'apam-mcp',
@@ -15,7 +16,7 @@ const server = new McpServer({
 
 server.tool(
   'apam_recall',
-  'Load project memory context (L1 fast recall + L3 semantic cards + recent sessions). Call this at the start of every session.',
+  'Load full project memory: L1 fast recall (preferences, project index), Project Intelligence (architecture, patterns, plans), and recent session episodes. Call at the start of every session before doing anything else.',
   { project_id: z.string().describe('Project identifier derived from git remote or directory hash') },
   async ({ project_id }) => {
     const db = getDb(project_id);
@@ -54,7 +55,7 @@ server.tool(
 
 server.tool(
   'apam_write_episode',
-  'Record a session episode into L2 memory. Call before finishing the final response of a session. Automatically triggers L3 consolidation when threshold is reached.',
+  'Record a session episode into L2. Call when a meaningful chunk of work is complete — can be called multiple times per session. Include implementation plan summaries and doc pointers where relevant. Automatically triggers Project Intelligence consolidation when threshold is reached.',
   {
     project_id: z.string(),
     session_start: z.string().describe('ISO 8601 timestamp'),
@@ -77,8 +78,27 @@ server.tool(
 );
 
 server.tool(
+  'apam_update_intelligence',
+  'Directly write or update a Project Intelligence record. Use immediately when architectural decisions are made, key patterns emerge, important module knowledge is established, or future plans are discussed. Do NOT wait for episode consolidation — write as soon as the knowledge is produced.',
+  {
+    project_id: z.string(),
+    type: z.enum(['architecture', 'procedural', 'pattern', 'entity']).describe(
+      'architecture = system design, key decisions, tech stack; procedural = how-to knowledge, workflows; pattern = recurring approaches, conventions; entity = key modules, APIs, data models'
+    ),
+    title: z.string().describe('Short unique label (e.g. "Auth System", "API Endpoints", "Folder Structure", "Future Plans")'),
+    content: z.string().describe('The knowledge — clear, structured, useful to a future session starting cold'),
+    source_episode_ids: z.array(z.string()).optional(),
+  },
+  async ({ project_id, type, title, content, source_episode_ids }) => {
+    const db = getDb(project_id);
+    const card = upsertCard(db, { type, project_id, title, content, source_episode_ids: source_episode_ids ?? [] });
+    return { content: [{ type: 'text', text: `Project Intelligence updated: "${title}" (${type}, v${card.version})` }] };
+  }
+);
+
+server.tool(
   'apam_consolidate',
-  'Manually trigger L3 consolidation — distills unconsolidated L2 episodes into semantic knowledge cards.',
+  'Trigger consolidation — distills unconsolidated L2 episodes into Project Intelligence records.',
   { project_id: z.string() },
   async ({ project_id }) => {
     const db = getDb(project_id);

@@ -21,7 +21,7 @@ export function handleRecall(db: Database.Database, projectId: string): string {
     const cards = l3Cards
       .map(c => `### ${c.title} (${c.type})\n${c.content}`)
       .join('\n\n');
-    sections.push(`## Project Knowledge (L3)\n${cards}`);
+    sections.push(`## Project Intelligence\n${cards}`);
   }
 
   if (recentEpisodes.length > 0) {
