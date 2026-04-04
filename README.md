@@ -12,12 +12,12 @@ APAM stores memory in three layers in a local SQLite database (`~/.apam/<project
 
 | Layer | Name | What it stores | Lifetime |
 |---|---|---|---|
-| **L1** | Fast Recall | Preferences, decisions, constraints, commitments | Persistent (evicted only when stale + low-salience) |
-| **L2** | Episodes | Session summaries with git context | Permanent, append-only |
-| **L3** | Semantic Cards | Consolidated knowledge: architecture, patterns, procedures, modules | Auto-updated every 5 episodes |
+| **L1** | Fast Recall | User preferences + project index: stack, endpoints, folder structure, constraints | Persistent (evicted only when stale + low-salience) |
+| **L2** | Episodes | Session logs: what was done, decisions made, files changed, plan/doc pointers | Permanent, append-only |
+| **L3** | Project Intelligence | Architecture, patterns, procedures, modules, future plans, enhancement ideas | Written immediately as knowledge is produced; also auto-updated from episodes |
 | **L4** | Codebase | Your files and git history | Already exists — Claude reads it directly |
 
-At the start of each session, Claude calls `apam_recall` and gets all three layers loaded into context. Before finishing, it calls `apam_write_episode` to log what happened. Every 5 unconsolidated episodes, L2 is automatically distilled into L3 cards.
+At the start of each session, Claude calls `apam_recall` to load all three layers into context. As the session progresses, Claude writes to L1, L2, and L3 proactively — not just at the end.
 
 ---
 
@@ -29,18 +29,19 @@ Three components work together:
 Claude Code Session
 │
 ├── APAM Skill (Superpowers plugin)
-│   └── Tells Claude when to recall, pin, and write episodes
+│   └── Tells Claude when to recall, pin, update intelligence, and write episodes
 │
 ├── Claude Code Hooks (in ~/.claude/settings.json)
-│   ├── PreToolUse → apam-load-context  (reminds Claude to call apam_recall)
+│   ├── PreToolUse → apam-load-context   (reminds Claude to call apam_recall)
 │   └── Stop       → apam-write-episode  (fallback episode writer at session end)
 │
-└── APAM MCP Server  (npx apam-mcp)
-    ├── apam_recall        — load L1 + L3 + recent L2 into context
-    ├── apam_pin           — write a fact to L1 fast recall
-    ├── apam_write_episode — log a session episode to L2
-    ├── apam_consolidate   — manually trigger L3 consolidation
-    └── apam_status        — memory health snapshot
+└── APAM MCP Server  (apam-mcp)
+    ├── apam_recall               — load L1 + Project Intelligence + recent L2
+    ├── apam_pin                  — write a fact to L1 fast recall
+    ├── apam_update_intelligence  — write directly to Project Intelligence (L3)
+    ├── apam_write_episode        — log a session episode to L2
+    ├── apam_consolidate          — distill L2 episodes into Project Intelligence
+    └── apam_status               — memory health snapshot
          │
          └── SQLite: ~/.apam/<project-id>/apam.db
 ```
@@ -51,7 +52,7 @@ Claude Code Session
 
 - Node.js 18+
 - Claude Code CLI or desktop app
-- [Superpowers plugin](https://github.com/anthropics/claude-code) for the APAM skill
+- Superpowers plugin (for the APAM skill)
 
 ---
 
@@ -76,7 +77,7 @@ This makes the `apam`, `apam-mcp`, `apam-load-context`, and `apam-write-episode`
 
 ### 3. Register the MCP server with Claude Code
 
-Add the server to your Claude Code MCP config. The config file lives at:
+The config file location:
 - **Mac/Linux:** `~/.claude/claude_desktop_config.json`
 - **Windows:** `%USERPROFILE%\.claude\claude_desktop_config.json`
 
@@ -117,21 +118,21 @@ If you skipped `npm link`, use the full path to the built binary instead:
 }
 ```
 
-### 3. Install the APAM skill plugin
+### 4. Install the APAM skill plugin
 
-The skill ships as a Claude Code plugin. Register the plugin directory as a marketplace, then install from it:
+The skill ships as a Claude Code plugin. Register the plugin directory as a local marketplace, then install:
 
 ```bash
-# From the APAM repo root — register as a local marketplace (run once)
+# From the APAM repo root — register once
 claude plugin marketplace add /path/to/APAM/packages/apam-skill
 
-# Then install the plugin
+# Install the plugin
 claude plugin install apam@apam
 ```
 
 Replace `/path/to/APAM` with the actual path where you cloned the repo.
 
-To verify it installed:
+Verify it installed:
 
 ```bash
 claude plugin list
@@ -140,7 +141,7 @@ claude plugin list
 
 > **Note:** The marketplace registration points at your cloned directory. If you move the repo, re-run `claude plugin marketplace add` with the new path.
 
-### 4. Initialise for your project
+### 5. Initialise for your project
 
 Run this once from inside your project directory:
 
@@ -159,14 +160,13 @@ After running `apam init`, restart Claude Code for the hooks to take effect.
 
 ## Verification
 
-Check that everything is wired up correctly:
-
 ```bash
 # From your project directory
 apam status
 ```
 
 Expected output:
+
 ```
 ## APAM Memory Status
 Project: a1b2c3d4e5f6a7b8
@@ -177,7 +177,7 @@ Next consolidation at: 5 unconsolidated episodes (5 more needed)
 Last session: none
 ```
 
-If you see this, APAM is working. Start a Claude Code session in your project — Claude will call `apam_recall` at the start (loaded via the skill) and `apam_write_episode` before finishing.
+Start a Claude Code session — the skill will instruct Claude to call `apam_recall` immediately and begin populating memory as the session progresses.
 
 ---
 
@@ -185,26 +185,27 @@ If you see this, APAM is working. Start a Claude Code session in your project �
 
 ```bash
 apam init              # Initialise project, create DB, configure hooks
-apam status            # Show memory counts and next consolidation threshold
-apam consolidate       # Manually trigger L3 consolidation now
-apam forget <card-id>  # Delete an L3 card by its ID
+apam status            # Show memory counts and consolidation status
+apam consolidate       # Manually trigger Project Intelligence consolidation
+apam forget <card-id>  # Delete a Project Intelligence record by ID
 ```
 
 ---
 
 ## MCP Tools Reference
 
-These are called by Claude automatically (via the skill). You can also call them manually in a Claude session.
+Called by Claude automatically via the skill. You can also invoke them manually in a Claude session.
 
 | Tool | Purpose | Key inputs |
 |---|---|---|
-| `apam_recall` | Load all memory for a project | `project_id` |
-| `apam_pin` | Store a fact in L1 fast recall | `type`, `content`, `scope`, `confidence` |
-| `apam_write_episode` | Log a session to L2 | `project_id`, `summary`, `decisions`, `files_touched`, … |
-| `apam_consolidate` | Distill L2 episodes into L3 cards | `project_id` |
+| `apam_recall` | Load all memory for a project at session start | `project_id` |
+| `apam_pin` | Write a fact to L1 fast recall | `type`, `content`, `scope`, `confidence` |
+| `apam_update_intelligence` | Write directly to Project Intelligence | `project_id`, `type`, `title`, `content` |
+| `apam_write_episode` | Log a unit of work to L2 | `project_id`, `summary`, `decisions`, `files_touched`, … |
+| `apam_consolidate` | Distill L2 episodes into Project Intelligence | `project_id` |
 | `apam_status` | Memory health snapshot | `project_id` (optional) |
 
-### apam_pin types and scopes
+### apam_pin — types and scopes
 
 **Types**: `preference` · `decision` · `constraint` · `commitment`
 
@@ -216,41 +217,78 @@ These are called by Claude automatically (via the skill). You can also call them
 - `user_confirmed` — user stated it explicitly (salience: 0.9)
 - `claude_inferred` — Claude observed a strong pattern (salience: 0.7)
 
+### apam_update_intelligence — types
+
+| Type | Use for |
+|---|---|
+| `architecture` | System design, key decisions, why things are built the way they are; also future plans |
+| `entity` | What exists: APIs, endpoints, schemas, key modules — orientation-level, not full specs |
+| `procedural` | How-to knowledge: running tests, deployment, local setup |
+| `pattern` | Recurring conventions, error handling approaches, naming rules |
+
+---
+
+## What Claude Stores in L1
+
+L1 is a **project index**, not just a preferences store. Claude pins:
+
+**Global (all projects)**
+- User preferences and communication style
+- Workflow preferences ("always run tests before committing")
+
+**Project-specific**
+- What the project is and what problem it solves
+- Tech stack: languages, frameworks, key libraries
+- Folder structure: where is src, tests, config
+- Entry points: main file, CLI, server start command
+- APIs and endpoints: names and one-line purpose each
+- Databases and data models: what DB, what main schemas
+- Key external services or integrations
+- Active constraints ("never expose X", "always go through Y")
+
 ---
 
 ## Memory Lifecycle
 
 ```
-Session N starts
-  └── apam_recall called
-      └── Returns: L1 atoms + L3 cards + last 2 episodes
+Session starts
+  └── apam_recall → loads L1 (fast recall) + Project Intelligence + last 2 episodes
 
-During session
-  └── apam_pin called for high-salience facts
+New project detected
+  └── Claude explores codebase / asks user
+      └── Immediately pins project facts to L1
+          └── Writes initial Project Intelligence records
 
-Session N ends
-  └── apam_write_episode called
-      └── If unconsolidated episodes >= 5:
-          └── apam_consolidate runs automatically
-              └── L2 episodes → L3 cards (decisions, patterns, problems, modules)
+During session (as knowledge is produced)
+  ├── apam_pin         — new fact learned about project or user preference
+  ├── apam_update_intelligence — architecture discussed, API designed, plan created
+  └── apam_write_episode — meaningful chunk of work completed (can happen multiple times)
+
+Session ends
+  └── Any pending Project Intelligence + final episode written
+
+Every 5 unconsolidated episodes (automatic)
+  └── apam_consolidate → decisions/patterns/problems from episodes → Project Intelligence
 ```
 
 ---
 
-## L3 Consolidation
+## Project Intelligence
 
-Every 5 unconsolidated episodes, APAM runs the consolidation job. It reads all pending episodes and produces or updates L3 cards:
+Project Intelligence (L3) is the durable knowledge layer — written directly by Claude as knowledge is produced, not just distilled from episodes. Claude calls `apam_update_intelligence` in the same response where architectural decisions are made, not deferred to session end.
 
-| Card type | Source | Title |
+Records are **upserted by title** — "API Endpoints" always updates the same record. Content from prior writes is preserved and appended.
+
+**Periodic consolidation** (every 5 episodes) also writes to Project Intelligence automatically:
+
+| Record | Source | Title |
 |---|---|---|
 | `architecture` | `decisions[]` from episodes | "Key Decisions" |
 | `pattern` | `patterns_observed[]` from episodes | "Observed Patterns" |
 | `procedural` | `problems_solved[]` from episodes | "Problems Solved" |
 | `entity` | Files touched ≥ 2 episodes | "Module: \<dir\>" |
 
-Cards are upserted, not replaced — content from prior runs is preserved and new content is appended. Each card tracks which episodes it was derived from (`source_episode_ids`).
-
-You can also trigger consolidation manually:
+Trigger consolidation manually at any time:
 
 ```bash
 apam consolidate
@@ -295,7 +333,7 @@ After `apam init`, two hooks are added to `~/.claude/settings.json`:
 ```
 
 - **`apam-load-context`** fires before every tool call. If the project DB exists, it outputs a JSON message reminding Claude to call `apam_recall`. Always exits 0 — never blocks a session.
-- **`apam-write-episode`** fires when Claude finishes responding. If Claude already wrote an episode in the last 10 minutes (via `apam_write_episode`), this is a no-op. Otherwise it writes a minimal fallback episode with git context. Always exits 0.
+- **`apam-write-episode`** fires when Claude finishes responding. If Claude already wrote an episode in the last 10 minutes, this is a no-op. Otherwise it writes a minimal fallback episode with git context. Always exits 0.
 
 ---
 
