@@ -24,8 +24,8 @@ export function handleStatus(db: Database.Database, projectId?: string): string 
     lines.push(`Project: ${projectId}`);
     lines.push(`L1 atoms (global + project): ${l1Count}`);
     lines.push(`L2 episodes: ${l2Total} total, ${l2Unconsolidated} unconsolidated`);
-    lines.push(`L3 cards: ${l3Count}`);
-    lines.push(`Next consolidation at: ${CONSOLIDATION_THRESHOLD} unconsolidated episodes (${CONSOLIDATION_THRESHOLD - l2Unconsolidated} more needed)`);
+    lines.push(`Project Intelligence records: ${l3Count}`);
+    lines.push(`Auto-consolidation at: ${CONSOLIDATION_THRESHOLD} unconsolidated episodes (${Math.max(0, CONSOLIDATION_THRESHOLD - l2Unconsolidated)} more needed)`);
     lines.push(`Last session: ${lastEp?.session_end ?? 'none'}`);
   } else {
     const l1Global = (

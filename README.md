@@ -172,8 +172,8 @@ Expected output:
 Project: a1b2c3d4e5f6a7b8
 L1 atoms (global + project): 0
 L2 episodes: 0 total, 0 unconsolidated
-L3 cards: 0
-Next consolidation at: 5 unconsolidated episodes (5 more needed)
+Project Intelligence records: 0
+Auto-consolidation at: 5 unconsolidated episodes (5 more needed)
 Last session: none
 ```
 
