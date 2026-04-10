@@ -5,8 +5,11 @@ export function handleStatus(db: Database.Database, projectId?: string): string 
   const lines: string[] = ['## APAM Memory Status'];
 
   if (projectId) {
-    const l1Count = (
-      db.prepare("SELECT COUNT(*) as c FROM l1_atoms WHERE scope='global' OR (scope='project' AND project_id=?)").get(projectId) as { c: number }
+    const l1Project = (
+      db.prepare("SELECT COUNT(*) as c FROM l1_atoms WHERE scope='project' AND project_id=?").get(projectId) as { c: number }
+    ).c;
+    const l1Global = (
+      db.prepare("SELECT COUNT(*) as c FROM l1_atoms WHERE scope='global'").get() as { c: number }
     ).c;
     const l2Total = (
       db.prepare('SELECT COUNT(*) as c FROM l2_episodes WHERE project_id=?').get(projectId) as { c: number }
@@ -22,10 +25,10 @@ export function handleStatus(db: Database.Database, projectId?: string): string 
       .get(projectId) as { session_end: string } | undefined;
 
     lines.push(`Project: ${projectId}`);
-    lines.push(`L1 atoms (global + project): ${l1Count}`);
+    lines.push(`L1 atoms: ${l1Project} project-scoped, ${l1Global} global`);
     lines.push(`L2 episodes: ${l2Total} total, ${l2Unconsolidated} unconsolidated`);
-    lines.push(`Project Intelligence records: ${l3Count}`);
-    lines.push(`Auto-consolidation at: ${CONSOLIDATION_THRESHOLD} unconsolidated episodes (${Math.max(0, CONSOLIDATION_THRESHOLD - l2Unconsolidated)} more needed)`);
+    lines.push(`L3 Project Intelligence records: ${l3Count}`);
+    lines.push(`L2 auto-consolidation: every ${CONSOLIDATION_THRESHOLD} episodes (direct L3 writes via apam_update_intelligence are always immediate)`);
     lines.push(`Last session: ${lastEp?.session_end ?? 'none'}`);
   } else {
     const l1Global = (

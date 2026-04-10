@@ -66,9 +66,9 @@ Also write Project Intelligence for:
 
 At the very start of every session, **before doing anything else**:
 
-1. Call `apam_status` — get the project ID and memory state
-2. **Copy the project ID exactly from the `apam_status` output** (it is a 16-character hex string like `a1b2c3d4e5f6a7b8`). Use this exact string as `project_id` in every subsequent tool call. Never construct or guess the project ID.
-3. Call `apam_recall` with that project_id
+1. Call `apam_status` **with no arguments** — it auto-detects the project from the current directory
+2. The output will contain a line like `Project: a1b2c3d4e5f6a7b8`. **Copy those 16 hex characters exactly.** Use this string as `project_id` in every subsequent tool call.
+3. Call `apam_recall` with that `project_id`
 4. Read the returned context — it tells you the project, history, and what's known
 5. If this is a **new project** (no memory found):
    - Explore briefly: read package.json, README, folder structure
@@ -77,7 +77,7 @@ At the very start of every session, **before doing anything else**:
 
 **Do not answer the user's request until you have loaded memory.**
 
-> **Critical:** The project_id is always the hex string from `apam_status`. Never use a directory name, repo name, or any other string as the project_id. Using the wrong project_id silently stores data under a phantom project that will never be loaded.
+> **Critical:** The `project_id` is the 16-char hex string on the `Project:` line of `apam_status` output. It looks like `a1b2c3d4e5f6a7b8`. Never use a directory name, repo name, or any other string — doing so silently stores data in a phantom project that is never loaded. If you are unsure, call `apam_status` again and read the value off the output.
 
 ---
 

@@ -8,6 +8,7 @@ import { handleWriteEpisode } from './tools/write-episode.js';
 import { handleConsolidate } from './tools/consolidate.js';
 import { handleStatus } from './tools/status.js';
 import { upsertCard } from './layers/l3.js';
+import { getProjectId } from './utils/project-id.js';
 
 const server = new McpServer({
   name: 'apam-mcp',
@@ -109,11 +110,12 @@ server.tool(
 
 server.tool(
   'apam_status',
-  'Show memory health snapshot: atom counts, unconsolidated episodes, last consolidation timestamp.',
-  { project_id: z.string().optional() },
+  'Show memory health snapshot for the current project. Call with no arguments — auto-detects the project from cwd. Returns the project_id you must copy exactly for all other tool calls.',
+  { project_id: z.string().optional().describe('Omit to auto-detect from current directory') },
   async ({ project_id }) => {
-    const db = getDb(project_id ?? 'global');
-    const content = handleStatus(db, project_id);
+    const resolvedId = project_id ?? getProjectId();
+    const db = getDb(resolvedId);
+    const content = handleStatus(db, resolvedId);
     return { content: [{ type: 'text', text: content }] };
   }
 );
