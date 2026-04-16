@@ -5,6 +5,17 @@ description: APAM Memory — gives Claude Code persistent, layered memory across
 
 # APAM Memory Skill
 
+## Quick Commands
+
+| Command | When to use |
+|---|---|
+| `/apam:apam-fetch` | Start of any session — load memory |
+| `/apam:apam-init` | First time in a new project — bootstrap memory |
+| `/apam:apam-update` | After building or designing something — save what was learned |
+| `/apam:apam-consolidate` | Manually distil L2 episodes into L3 records |
+
+Use the focused commands above for day-to-day use. This document is the full policy reference.
+
 You have access to persistent layered memory via the APAM MCP server. This memory persists across sessions — you never start blank. **Follow this policy exactly and proactively.** Do not wait to be asked to write memory. Write it as the knowledge is produced.
 
 ---
@@ -83,13 +94,21 @@ At the very start of every session, **before doing anything else**:
 
 ## During a Session: Write Memory As You Go
 
-### Pin to L1 immediately when you learn:
-- A user preference not already in recall
-- A project fact not already indexed (a new endpoint, module, dependency)
+### Write to L1 when:
+
+**New fact** — something not covered by any existing atom:
+- A user preference
+- A new endpoint, module, service, or dependency
 - A constraint ("never expose X", "this service is rate-limited")
 - A confirmed decision
 
-Do not re-pin facts already in the L1 recall output.
+**Existing atom is stale** — this session changed something an atom describes:
+- A tool was added or removed → update the tools atom
+- Folder structure changed → update the structure atom
+- Stack changed (new lib added, something swapped out) → update the stack atom
+- A constraint was lifted or changed → update the constraint atom
+
+Call `apam_pin` with the corrected full content. The upsert matches on type+content+scope, so write the complete updated fact — not just the delta. One fact per atom.
 
 ### Write Project Intelligence immediately when:
 - Architecture or design is discussed — even if nothing is built yet
