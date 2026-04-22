@@ -6,6 +6,7 @@ interface PinInput {
   content: string;
   scope: L1Scope;
   confidence: L1Confidence;
+  agent_name?: string;
   project_id?: string;
   source_episode_id?: string;
   salience?: number;
@@ -17,9 +18,10 @@ export function handlePin(db: Database.Database, input: PinInput): string {
     content: input.content,
     scope: input.scope,
     confidence: input.confidence,
+    source_agent: input.agent_name ?? 'unknown',
     project_id: input.project_id ?? null,
     source_episode_id: input.source_episode_id ?? null,
     salience: input.salience ?? (input.confidence === 'user_confirmed' ? 0.9 : 0.7),
   });
-  return `Pinned [${atom.type}/${atom.scope}]: "${atom.content}" (confidence: ${atom.confidence})`;
+  return `Pinned [${atom.type}/${atom.scope}]: "${atom.content}" (confidence: ${atom.confidence}, agent: ${atom.source_agent})`;
 }

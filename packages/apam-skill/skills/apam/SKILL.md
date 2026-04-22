@@ -202,5 +202,5 @@ Do this **in the same response where you design the endpoints**.
 - **L1 atoms are granular.** One fact per atom. Not: "project is X built with Y and Z and uses W for Q." Split into separate atoms.
 - **Project Intelligence titles are keys.** "API Endpoints" always refers to the same record — use consistent titles so records update, not multiply.
 - **If a Project Intelligence record is wrong**, tell the user and suggest: `apam forget <card-id>` then rewrite with `apam_update_intelligence`.
-- **Trust `user_confirmed` L1 facts absolutely.** Treat `claude_inferred` as strong defaults the user can override.
+- **Trust `user_confirmed` L1 facts absolutely.** Treat `agent_inferred` as strong defaults the user can override.
 - **Do not write episodes for trivial sessions** — brief clarifying exchanges, no code written, no decisions made.

@@ -31,7 +31,7 @@ Do not read every file — scan strategically. `package.json`, `README.md`, top-
 
 ### 3. Pin L1 atoms
 
-For each fact you learn, pin one atom per fact using `apam_pin` (scope: `project`, confidence: `claude_inferred`):
+For each fact you learn, pin one atom per fact using `apam_pin` (scope: `project`, confidence: `agent_inferred`):
 
 1. What this project is — one sentence
 2. Tech stack: languages, frameworks, key libraries

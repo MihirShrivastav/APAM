@@ -14,6 +14,7 @@ export interface L2Episode {
   decisions: string[];
   problems_solved: string[];
   patterns_observed: string[];
+  agent_name: string;
   consolidated: boolean;
 }
 
@@ -42,14 +43,16 @@ function rowToEpisode(row: L2Row): L2Episode {
 
 export function writeEpisode(
   db: Database.Database,
-  episode: Omit<L2Episode, 'id' | 'consolidated'>
+  episode: Omit<L2Episode, 'id' | 'consolidated' | 'agent_name'> & {
+    agent_name?: string;
+  }
 ): L2Episode {
   const id = randomUUID();
   db.prepare(`
     INSERT INTO l2_episodes
       (id, project_id, session_start, session_end, git_branch, git_commit_before,
-       git_commit_after, files_touched, summary, decisions, problems_solved, patterns_observed, consolidated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+       git_commit_after, files_touched, summary, decisions, problems_solved, patterns_observed, agent_name, consolidated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
   `).run(
     id,
     episode.project_id,
@@ -62,9 +65,10 @@ export function writeEpisode(
     episode.summary,
     JSON.stringify(episode.decisions),
     JSON.stringify(episode.problems_solved),
-    JSON.stringify(episode.patterns_observed)
+    JSON.stringify(episode.patterns_observed),
+    episode.agent_name ?? 'unknown'
   );
-  return { ...episode, id, consolidated: false };
+  return { ...episode, agent_name: episode.agent_name ?? 'unknown', id, consolidated: false };
 }
 
 export function getRecentEpisodes(
