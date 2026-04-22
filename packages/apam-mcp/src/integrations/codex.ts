@@ -43,16 +43,35 @@ description: APAM Memory for Codex. Use when Codex needs persistent project memo
 
 Use APAM as the project memory system for Codex. Prefer the focused skills for day-to-day work:
 
+- \`$apam-status\` to fetch the authoritative \`project_id\` for the current repo
 - \`$apam-fetch\` at session start
 - \`$apam-init\` for a new project
 - \`$apam-update\` after meaningful work
 - \`$apam-consolidate\` to distill episodes into L3
 
-Always call \`apam_status\` with no arguments first, copy the exact \`Project:\` value, then use that \`project_id\` for APAM tool calls.
+Always resolve the project ID with the local \`apam status\` CLI command first, then use that exact \`project_id\` for APAM tool calls. Do not rely on MCP \`apam_status\` auto-detection inside a long-lived server process, because its cwd may not match the active repository.
 
 When writing inferred facts, use \`confidence = "agent_inferred"\`. When writing Codex-originated memory, pass \`agent_name = "codex"\`.
 
 Use \`/plugins\` to verify APAM is installed and \`/skills\` or \`$apam-*\` to invoke the focused APAM workflows explicitly when needed.
+`,
+  'apam-status/SKILL.md': `---
+name: apam-status
+description: Resolve the authoritative APAM project ID for the current repository by running the local APAM CLI in the repo context.
+---
+
+# APAM Status
+
+1. Run \`apam status\` from the repository root using the local shell.
+2. Read the line that starts with \`Project:\` and copy the exact 16-character hex value.
+3. Treat that value as the authoritative \`project_id\` for all APAM MCP tool calls in this session.
+4. Report the project ID and any useful counts from the status output.
+
+Rules:
+
+- Do not construct or guess the \`project_id\`.
+- Do not rely on MCP \`apam_status\` with no arguments for project discovery inside Codex, because the MCP server may be running from a different cwd.
+- If \`apam\` is not globally available, run \`node /absolute/path/to/APAM/packages/apam-mcp/dist/cli.js status\` from the target repository instead.
 `,
   'apam-fetch/SKILL.md': `---
 name: apam-fetch
@@ -61,7 +80,7 @@ description: Fetch APAM memory for the current project in Codex. Use at the star
 
 # APAM Fetch
 
-1. Call \`apam_status\` with no arguments.
+1. Run \`$apam-status\` or the local \`apam status\` CLI command from the current repository.
 2. Copy the exact 16-character hex value from the \`Project:\` line.
 3. Call \`apam_recall\` with that \`project_id\`.
 4. Summarize what APAM knows: key L1 facts, recent L2 episodes, and relevant L3 cards.
@@ -74,7 +93,7 @@ description: Initialize APAM memory for a new project in Codex by exploring the 
 
 # APAM Init
 
-1. Call \`apam_status\` with no arguments, copy the exact \`project_id\`, then call \`apam_recall\`.
+1. Run \`$apam-status\` or the local \`apam status\` CLI command, copy the exact \`project_id\`, then call \`apam_recall\`.
 2. Explore the project strategically: README, package manifests, top-level structure, and key source files.
 3. Write one L1 atom per fact with \`scope = "project"\`, \`confidence = "agent_inferred"\`, and \`agent_name = "codex"\`.
 4. Write at least these L3 cards with \`agent_name = "codex"\`:
@@ -89,7 +108,7 @@ description: Update APAM memory for work completed in the current Codex session.
 
 # APAM Update
 
-1. Call \`apam_status\` with no arguments unless you already have the exact \`project_id\`.
+1. Run \`$apam-status\` or the local \`apam status\` CLI command unless you already have the exact \`project_id\` from this repository.
 2. Review what happened in this session: changes made, decisions, files touched, problems solved, patterns observed, and plans discussed.
 3. Update or add L1 atoms using \`confidence = "agent_inferred"\` and \`agent_name = "codex"\`.
 4. Update L3 cards immediately with \`agent_name = "codex"\`.
@@ -103,7 +122,7 @@ description: Consolidate APAM episodes into L3 project intelligence in Codex. Us
 
 # APAM Consolidate
 
-1. Call \`apam_status\` with no arguments and copy the exact \`project_id\`.
+1. Run \`$apam-status\` or the local \`apam status\` CLI command and copy the exact \`project_id\`.
 2. Note the unconsolidated episode count from the status output.
 3. Call \`apam_consolidate\` with that \`project_id\`.
 4. Report how many cards were created or updated.

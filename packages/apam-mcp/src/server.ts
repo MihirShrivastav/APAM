@@ -133,7 +133,7 @@ server.tool(
 
 server.tool(
   'apam_status',
-  'Show memory health snapshot for the current project. Call with no arguments - auto-detects the project from cwd. Returns the project_id you must copy exactly for all other tool calls.',
+  'Show memory health snapshot for a project. Prefer passing project_id explicitly. If omitted, the server auto-detects from its own cwd, which may not match the active repository in long-lived agent sessions.',
   { project_id: z.string().optional().describe('Omit to auto-detect from current directory') },
   async ({ project_id }) => {
     const resolvedId = project_id ?? getProjectId();

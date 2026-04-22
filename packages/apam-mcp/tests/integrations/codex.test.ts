@@ -14,11 +14,13 @@ describe('Codex integration', () => {
     const { configPath, marketplacePath, pluginRoot } = getCodexIntegrationPaths(homeRoot);
     const pluginPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
     const skillPath = join(pluginRoot, 'skills', 'apam-fetch', 'SKILL.md');
+    const statusSkillPath = join(pluginRoot, 'skills', 'apam-status', 'SKILL.md');
 
     expect(existsSync(configPath)).toBe(true);
     expect(existsSync(marketplacePath)).toBe(true);
     expect(existsSync(pluginPath)).toBe(true);
     expect(existsSync(skillPath)).toBe(true);
+    expect(existsSync(statusSkillPath)).toBe(true);
 
     const config = readFileSync(configPath, 'utf8');
     expect(config).toContain('[mcp_servers.apam]');
@@ -36,5 +38,9 @@ describe('Codex integration', () => {
     const plugin = JSON.parse(readFileSync(pluginPath, 'utf8')) as { name: string; skills: string };
     expect(plugin.name).toBe('apam');
     expect(plugin.skills).toBe('./skills/');
+
+    const statusSkill = readFileSync(statusSkillPath, 'utf8');
+    expect(statusSkill).toContain('Run `apam status`');
+    expect(statusSkill).toContain('Do not rely on MCP `apam_status` with no arguments');
   });
 });
