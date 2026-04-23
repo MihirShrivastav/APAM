@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 
 export type L1Type = 'preference' | 'decision' | 'constraint' | 'commitment';
 export type L1Scope = 'global' | 'project';
-export type L1Confidence = 'user_confirmed' | 'claude_inferred';
+export type L1Confidence = 'user_confirmed' | 'agent_inferred';
 
 export interface L1Atom {
   id: string;
@@ -14,13 +14,16 @@ export interface L1Atom {
   confidence: L1Confidence;
   salience: number;
   source_episode_id: string | null;
+  source_agent: string;
   created_at: string;
   updated_at: string;
 }
 
 export function pinAtom(
   db: Database.Database,
-  atom: Omit<L1Atom, 'id' | 'created_at' | 'updated_at'>
+  atom: Omit<L1Atom, 'id' | 'created_at' | 'updated_at' | 'source_agent'> & {
+    source_agent?: string;
+  }
 ): L1Atom {
   const now = new Date().toISOString();
   const existing = db
@@ -43,9 +46,21 @@ export function pinAtom(
   const id = randomUUID();
   db.prepare(`
     INSERT INTO l1_atoms
-      (id, type, scope, project_id, content, confidence, salience, source_episode_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, atom.type, atom.scope, atom.project_id, atom.content, atom.confidence, atom.salience, atom.source_episode_id, now, now);
+      (id, type, scope, project_id, content, confidence, salience, source_episode_id, source_agent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    atom.type,
+    atom.scope,
+    atom.project_id,
+    atom.content,
+    atom.confidence,
+    atom.salience,
+    atom.source_episode_id,
+    atom.source_agent ?? 'unknown',
+    now,
+    now
+  );
   return db.prepare('SELECT * FROM l1_atoms WHERE id = ?').get(id) as L1Atom;
 }
 

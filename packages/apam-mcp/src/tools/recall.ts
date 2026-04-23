@@ -13,20 +13,23 @@ export function handleRecall(db: Database.Database, projectId: string): string {
   const sections: string[] = [];
 
   if (l1Atoms.length > 0) {
-    const lines = l1Atoms.map(a => `[${a.type}] ${a.content}`).join('\n');
+    const lines = l1Atoms.map(atom => `[${atom.type}] ${atom.content}`).join('\n');
     sections.push(`## Fast Recall (L1)\n${lines}`);
   }
 
   if (l3Cards.length > 0) {
     const cards = l3Cards
-      .map(c => `### ${c.title} (${c.type})\n${c.content}`)
+      .map(card => `### ${card.title} (${card.type})\n${card.content}`)
       .join('\n\n');
-    sections.push(`## L3 — Project Intelligence\n${cards}`);
+    sections.push(`## L3 - Project Intelligence\n${cards}`);
   }
 
   if (recentEpisodes.length > 0) {
     const lines = recentEpisodes
-      .map(e => `[${e.session_end.slice(0, 10)}] branch:${e.git_branch} — ${e.summary || 'no summary'}`)
+      .map(
+        episode =>
+          `[${episode.session_end.slice(0, 10)}] agent:${episode.agent_name} branch:${episode.git_branch} - ${episode.summary || 'no summary'}`
+      )
       .join('\n');
     sections.push(`## Recent Sessions (L2)\n${lines}`);
   }

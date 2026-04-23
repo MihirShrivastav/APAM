@@ -30,12 +30,14 @@ describe('L2 layer', () => {
       decisions: ['use JWT over sessions'],
       problems_solved: ['fixed token expiry bug'],
       patterns_observed: ['always co-locate tests'],
+      agent_name: 'codex',
     });
 
     const episodes = getRecentEpisodes(db, 'proj-1', 2);
     expect(episodes).toHaveLength(1);
     expect(episodes[0].files_touched).toEqual(['src/auth.ts', 'tests/auth.test.ts']);
     expect(episodes[0].decisions).toEqual(['use JWT over sessions']);
+    expect(episodes[0].agent_name).toBe('codex');
     expect(episodes[0].consolidated).toBe(false);
   });
 
@@ -45,17 +47,49 @@ describe('L2 layer', () => {
         project_id: 'proj-1',
         session_start: `2026-04-0${i + 1}T09:00:00Z`,
         session_end: `2026-04-0${i + 1}T10:00:00Z`,
-        git_branch: 'main', git_commit_before: '', git_commit_after: '',
-        files_touched: [], summary: `session ${i}`,
-        decisions: [], problems_solved: [], patterns_observed: [],
+        git_branch: 'main',
+        git_commit_before: '',
+        git_commit_after: '',
+        files_touched: [],
+        summary: `session ${i}`,
+        decisions: [],
+        problems_solved: [],
+        patterns_observed: [],
+        agent_name: 'claude-code',
       });
     }
     expect(countUnconsolidated(db, 'proj-1')).toBe(3);
   });
 
   it('markConsolidated sets consolidated = true on all provided ids', () => {
-    const ep1 = writeEpisode(db, { project_id: 'proj-1', session_start: '2026-04-01T09:00:00Z', session_end: '2026-04-01T10:00:00Z', git_branch: 'main', git_commit_before: '', git_commit_after: '', files_touched: [], summary: 'ep1', decisions: [], problems_solved: [], patterns_observed: [] });
-    const ep2 = writeEpisode(db, { project_id: 'proj-1', session_start: '2026-04-02T09:00:00Z', session_end: '2026-04-02T10:00:00Z', git_branch: 'main', git_commit_before: '', git_commit_after: '', files_touched: [], summary: 'ep2', decisions: [], problems_solved: [], patterns_observed: [] });
+    const ep1 = writeEpisode(db, {
+      project_id: 'proj-1',
+      session_start: '2026-04-01T09:00:00Z',
+      session_end: '2026-04-01T10:00:00Z',
+      git_branch: 'main',
+      git_commit_before: '',
+      git_commit_after: '',
+      files_touched: [],
+      summary: 'ep1',
+      decisions: [],
+      problems_solved: [],
+      patterns_observed: [],
+      agent_name: 'codex',
+    });
+    const ep2 = writeEpisode(db, {
+      project_id: 'proj-1',
+      session_start: '2026-04-02T09:00:00Z',
+      session_end: '2026-04-02T10:00:00Z',
+      git_branch: 'main',
+      git_commit_before: '',
+      git_commit_after: '',
+      files_touched: [],
+      summary: 'ep2',
+      decisions: [],
+      problems_solved: [],
+      patterns_observed: [],
+      agent_name: 'codex',
+    });
 
     markConsolidated(db, [ep1.id, ep2.id]);
 

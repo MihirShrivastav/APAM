@@ -33,12 +33,18 @@ server.tool(
     type: z.enum(['preference', 'decision', 'constraint', 'commitment']),
     content: z.string().describe('Concise single-fact plain text'),
     scope: z.enum(['global', 'project']).describe('global = all projects, project = this repo only'),
-    confidence: z.enum(['user_confirmed', 'claude_inferred']),
+    confidence: z.enum(['user_confirmed', 'agent_inferred']),
+    agent_name: z.string().optional().describe('Agent that wrote this memory, e.g. codex or claude-code'),
     project_id: z.string().optional().describe('Required when scope is project'),
     source_episode_id: z.string().optional(),
-    salience: z.number().min(0).max(1).optional().describe('0.0–1.0, defaults to 0.9 for user_confirmed, 0.7 for claude_inferred'),
+    salience: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe('0.0-1.0, defaults to 0.9 for user_confirmed, 0.7 for agent_inferred'),
   },
-  async (input) => {
+  async input => {
     const projectId = input.project_id ?? 'global';
     const db = getDb(projectId);
     const content = handlePin(db, {
@@ -46,6 +52,7 @@ server.tool(
       content: input.content,
       scope: input.scope,
       confidence: input.confidence,
+      agent_name: input.agent_name,
       project_id: input.project_id,
       source_episode_id: input.source_episode_id,
       salience: input.salience,
@@ -56,7 +63,7 @@ server.tool(
 
 server.tool(
   'apam_write_episode',
-  'Record a session episode into L2. Call when a meaningful chunk of work is complete — can be called multiple times per session. Include implementation plan summaries and doc pointers where relevant. Automatically triggers Project Intelligence consolidation when threshold is reached.',
+  'Record a session episode into L2. Call when a meaningful chunk of work is complete - can be called multiple times per session. Include implementation plan summaries and doc pointers where relevant. Automatically triggers Project Intelligence consolidation when threshold is reached.',
   {
     project_id: z.string(),
     session_start: z.string().describe('ISO 8601 timestamp'),
@@ -65,41 +72,57 @@ server.tool(
     git_commit_before: z.string().default(''),
     git_commit_after: z.string().default(''),
     files_touched: z.array(z.string()).default([]),
-    summary: z.string().describe('2–4 sentence description of what was accomplished'),
+    summary: z.string().describe('2-4 sentence description of what was accomplished'),
     decisions: z.array(z.string()).default([]).describe('Key architectural or technical choices made'),
     problems_solved: z.array(z.string()).default([]).describe('Bugs fixed or blockers cleared'),
     patterns_observed: z.array(z.string()).default([]).describe('Recurring approaches or style signals'),
+    agent_name: z.string().optional().describe('Agent that wrote this episode, e.g. codex or claude-code'),
   },
-  async (input) => {
+  async input => {
     const { project_id, ...episodeInput } = input;
     const db = getDb(project_id);
-    const content = handleWriteEpisode(db, project_id, episodeInput);
+    const content = handleWriteEpisode(db, project_id, {
+      ...episodeInput,
+      agent_name: episodeInput.agent_name ?? 'unknown',
+    });
     return { content: [{ type: 'text', text: content }] };
   }
 );
 
 server.tool(
   'apam_update_intelligence',
-  'Directly write or update a Project Intelligence record. Use immediately when architectural decisions are made, key patterns emerge, important module knowledge is established, or future plans are discussed. Do NOT wait for episode consolidation — write as soon as the knowledge is produced.',
+  'Directly write or update a Project Intelligence record. Use immediately when architectural decisions are made, key patterns emerge, important module knowledge is established, or future plans are discussed. Do NOT wait for episode consolidation - write as soon as the knowledge is produced.',
   {
     project_id: z.string(),
-    type: z.enum(['architecture', 'procedural', 'pattern', 'entity']).describe(
-      'architecture = system design, key decisions, tech stack; procedural = how-to knowledge, workflows; pattern = recurring approaches, conventions; entity = key modules, APIs, data models'
-    ),
+    type: z
+      .enum(['architecture', 'procedural', 'pattern', 'entity'])
+      .describe(
+        'architecture = system design, key decisions, tech stack; procedural = how-to knowledge, workflows; pattern = recurring approaches, conventions; entity = key modules, APIs, data models'
+      ),
     title: z.string().describe('Short unique label (e.g. "Auth System", "API Endpoints", "Folder Structure", "Future Plans")'),
-    content: z.string().describe('The knowledge — clear, structured, useful to a future session starting cold'),
+    content: z.string().describe('The knowledge - clear, structured, useful to a future session starting cold'),
     source_episode_ids: z.array(z.string()).optional(),
+    agent_name: z.string().optional().describe('Agent that created or updated this card, e.g. codex or claude-code'),
   },
-  async ({ project_id, type, title, content, source_episode_ids }) => {
+  async ({ project_id, type, title, content, source_episode_ids, agent_name }) => {
     const db = getDb(project_id);
-    const card = upsertCard(db, { type, project_id, title, content, source_episode_ids: source_episode_ids ?? [] });
+    const sourceAgent = agent_name ?? 'unknown';
+    const card = upsertCard(db, {
+      type,
+      project_id,
+      title,
+      content,
+      source_episode_ids: source_episode_ids ?? [],
+      created_by_agent: sourceAgent,
+      updated_by_agent: sourceAgent,
+    });
     return { content: [{ type: 'text', text: `Project Intelligence updated: "${title}" (${type}, v${card.version})` }] };
   }
 );
 
 server.tool(
   'apam_consolidate',
-  'Trigger consolidation — distills unconsolidated L2 episodes into Project Intelligence records.',
+  'Trigger consolidation - distills unconsolidated L2 episodes into Project Intelligence records.',
   { project_id: z.string() },
   async ({ project_id }) => {
     const db = getDb(project_id);
@@ -110,7 +133,7 @@ server.tool(
 
 server.tool(
   'apam_status',
-  'Show memory health snapshot for the current project. Call with no arguments — auto-detects the project from cwd. Returns the project_id you must copy exactly for all other tool calls.',
+  'Show memory health snapshot for a project. Prefer passing project_id explicitly. If omitted, the server auto-detects from its own cwd, which may not match the active repository in long-lived agent sessions.',
   { project_id: z.string().optional().describe('Omit to auto-detect from current directory') },
   async ({ project_id }) => {
     const resolvedId = project_id ?? getProjectId();

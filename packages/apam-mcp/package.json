@@ -1,7 +1,7 @@
 {
   "name": "apam-mcp",
   "version": "0.1.0",
-  "description": "APAM Memory MCP Server for Claude Code",
+  "description": "APAM Memory MCP Server",
   "type": "module",
   "bin": {
     "apam-mcp": "./dist/server.js",

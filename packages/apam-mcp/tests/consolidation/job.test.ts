@@ -18,6 +18,7 @@ function makeEpisode(db: Database.Database, overrides: Partial<Parameters<typeof
     decisions: [],
     problems_solved: [],
     patterns_observed: [],
+    agent_name: 'codex',
     ...overrides,
   });
 }
@@ -41,15 +42,16 @@ describe('consolidation job', () => {
   });
 
   it('creates architecture card from decisions', () => {
-    makeEpisode(db, { decisions: ['use postgres', 'monorepo structure'] });
-    makeEpisode(db, { decisions: ['use JWT for auth'] });
+    makeEpisode(db, { decisions: ['use postgres', 'monorepo structure'], agent_name: 'claude-code' });
+    makeEpisode(db, { decisions: ['use JWT for auth'], agent_name: 'codex' });
     const { episodesProcessed } = runConsolidation(db, 'proj-1');
     expect(episodesProcessed).toBe(2);
     const cards = getCardsForProject(db, 'proj-1');
-    const archCard = cards.find(c => c.type === 'architecture');
+    const archCard = cards.find(card => card.type === 'architecture');
     expect(archCard).toBeDefined();
     expect(archCard!.content).toContain('use postgres');
     expect(archCard!.content).toContain('use JWT for auth');
+    expect(archCard!.updated_by_agent).toBe('codex');
   });
 
   it('marks all processed episodes as consolidated', () => {
@@ -68,14 +70,15 @@ describe('consolidation job', () => {
   });
 
   it('upserts existing cards on second consolidation run', () => {
-    makeEpisode(db, { decisions: ['decision A'] });
+    makeEpisode(db, { decisions: ['decision A'], agent_name: 'claude-code' });
     runConsolidation(db, 'proj-1');
-    makeEpisode(db, { decisions: ['decision B'] });
+    makeEpisode(db, { decisions: ['decision B'], agent_name: 'codex' });
     runConsolidation(db, 'proj-1');
     const cards = getCardsForProject(db, 'proj-1');
-    const archCard = cards.find(c => c.type === 'architecture');
+    const archCard = cards.find(card => card.type === 'architecture');
     expect(archCard!.version).toBe(2);
     expect(archCard!.content).toContain('decision A');
     expect(archCard!.content).toContain('decision B');
+    expect(archCard!.updated_by_agent).toBe('codex');
   });
 });

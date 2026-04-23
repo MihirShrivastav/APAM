@@ -10,6 +10,8 @@ export interface L3Card {
   title: string;
   content: string;
   source_episode_ids: string[];
+  created_by_agent: string;
+  updated_by_agent: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -25,7 +27,10 @@ function rowToCard(row: L3Row): L3Card {
 
 export function upsertCard(
   db: Database.Database,
-  card: Omit<L3Card, 'id' | 'version' | 'created_at' | 'updated_at'>
+  card: Omit<L3Card, 'id' | 'version' | 'created_at' | 'updated_at' | 'created_by_agent' | 'updated_by_agent'> & {
+    created_by_agent?: string;
+    updated_by_agent?: string;
+  }
 ): L3Card {
   const now = new Date().toISOString();
   const existing = db
@@ -38,8 +43,8 @@ export function upsertCard(
     const existingIds: string[] = JSON.parse(existing.source_episode_ids);
     const mergedIds = [...new Set([...existingIds, ...card.source_episode_ids])];
     db.prepare(
-      'UPDATE l3_cards SET content = ?, source_episode_ids = ?, version = version + 1, updated_at = ? WHERE id = ?'
-    ).run(card.content, JSON.stringify(mergedIds), now, existing.id);
+      'UPDATE l3_cards SET content = ?, source_episode_ids = ?, updated_by_agent = ?, version = version + 1, updated_at = ? WHERE id = ?'
+    ).run(card.content, JSON.stringify(mergedIds), card.updated_by_agent ?? 'unknown', now, existing.id);
     return rowToCard(
       db.prepare('SELECT * FROM l3_cards WHERE id = ?').get(existing.id) as L3Row
     );
@@ -48,11 +53,19 @@ export function upsertCard(
   const id = randomUUID();
   db.prepare(`
     INSERT INTO l3_cards
-      (id, type, project_id, title, content, source_episode_ids, version, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+      (id, type, project_id, title, content, source_episode_ids, created_by_agent, updated_by_agent, version, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
-    id, card.type, card.project_id, card.title, card.content,
-    JSON.stringify(card.source_episode_ids), now, now
+    id,
+    card.type,
+    card.project_id,
+    card.title,
+    card.content,
+    JSON.stringify(card.source_episode_ids),
+    card.created_by_agent ?? 'unknown',
+    card.updated_by_agent ?? 'unknown',
+    now,
+    now
   );
   return rowToCard(db.prepare('SELECT * FROM l3_cards WHERE id = ?').get(id) as L3Row);
 }

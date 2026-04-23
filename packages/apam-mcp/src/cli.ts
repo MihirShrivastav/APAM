@@ -3,31 +3,10 @@ import { getProjectId, getProjectLabel } from './utils/project-id.js';
 import { handleConsolidate } from './tools/consolidate.js';
 import { handleStatus } from './tools/status.js';
 import { deleteCard } from './layers/l3.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { configureClaudeIntegration, isClaudeIntegrationConfigured } from './integrations/claude.js';
+import { configureCodexIntegration, isCodexIntegrationConfigured } from './integrations/codex.js';
 
 const [, , command, ...args] = process.argv;
-
-function getClaudeSettingsPath(): string {
-  return join(homedir(), '.claude', 'settings.json');
-}
-
-function readSettings(): Record<string, unknown> {
-  const path = getClaudeSettingsPath();
-  if (!existsSync(path)) return {};
-  try {
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function writeSettings(settings: Record<string, unknown>): void {
-  const path = getClaudeSettingsPath();
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(settings, null, 2));
-}
 
 switch (command) {
   case 'init': {
@@ -38,28 +17,48 @@ switch (command) {
     // Ensure DB is created
     getDb(projectId);
 
-    // Configure hooks in Claude Code settings
-    const settings = readSettings();
-    const hooks = (settings.hooks as Record<string, unknown[]>) ?? {};
+    console.log('APAM database is ready.');
+    console.log('Integration status:');
+    console.log(
+      isClaudeIntegrationConfigured()
+        ? '  Claude Code: already installed globally; you can use APAM in this repo now'
+        : '  Claude Code: install once globally with apam integrate claude'
+    );
+    console.log(
+      isCodexIntegrationConfigured()
+        ? '  Codex:       already installed globally; you can use APAM in this repo now'
+        : '  Codex:       install once globally with apam integrate codex'
+    );
+    break;
+  }
 
-    const loadContextHook = { type: 'command', command: 'apam-load-context' };
-    const writeEpisodeHook = { type: 'command', command: 'apam-write-episode' };
+  case 'integrate': {
+    const target = args[0];
 
-    const preToolUse = (hooks['PreToolUse'] as { matcher: string; hooks: unknown[] }[]) ?? [];
-    if (!preToolUse.some(h => JSON.stringify(h).includes('apam-load-context'))) {
-      preToolUse.push({ matcher: '.*', hooks: [loadContextHook] });
+    if (target === 'claude') {
+      const settingsPath = configureClaudeIntegration();
+      console.log(`Claude integration configured in ${settingsPath}`);
+      break;
     }
 
-    const stopHooks = (hooks['Stop'] as { hooks: unknown[] }[]) ?? [];
-    if (!stopHooks.some(h => JSON.stringify(h).includes('apam-write-episode'))) {
-      stopHooks.push({ hooks: [writeEpisodeHook] });
+    if (target === 'codex') {
+      const paths = configureCodexIntegration();
+      console.log('Codex integration configured:');
+      for (const path of paths) console.log(`  ${path}`);
+      break;
     }
 
-    settings.hooks = { ...hooks, PreToolUse: preToolUse, Stop: stopHooks };
-    writeSettings(settings);
+    if (target === 'all') {
+      const settingsPath = configureClaudeIntegration();
+      const paths = configureCodexIntegration();
+      console.log(`Claude integration configured in ${settingsPath}`);
+      console.log('Codex integration configured:');
+      for (const path of paths) console.log(`  ${path}`);
+      break;
+    }
 
-    console.log('Hooks configured in ~/.claude/settings.json');
-    console.log('APAM initialised. Start the server with: npx apam-mcp');
+    console.error('Usage: apam integrate <claude|codex|all>');
+    process.exit(1);
     break;
   }
 
@@ -93,7 +92,8 @@ switch (command) {
   default:
     console.log(`APAM Memory CLI
 Usage:
-  apam init          Initialise APAM for this project and configure hooks
+  apam init          Initialise APAM for this project
+  apam integrate     Configure Claude, Codex, or both for this project
   apam status        Show memory health snapshot
   apam consolidate   Manually trigger L3 consolidation
   apam forget <id>   Delete an L3 card by ID
