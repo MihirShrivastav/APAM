@@ -222,6 +222,8 @@ What Codex integration writes:
 - `~/plugins/apam/.codex-plugin/plugin.json`
 - `~/plugins/apam/skills/*`
 
+The generated Codex config also enables the local `apam@apam-local` plugin directly, so APAM does not depend on the Codex TUI marketplace install flow to become usable.
+
 The generated Codex config expects these commands to exist by name:
 
 - `apam-mcp`
@@ -230,7 +232,7 @@ The generated Codex config expects these commands to exist by name:
 
 That is why the `npm link` flow is the recommended day-to-day install path.
 
-After running `apam integrate codex`, install or enable the APAM plugin from either Codex surface.
+After running `apam integrate codex`, APAM should already be enabled from the generated local plugin config. If you want to verify it manually, use either Codex surface below.
 
 Codex CLI:
 
@@ -238,13 +240,13 @@ Codex CLI:
 /plugins
 ```
 
-Then install or enable `APAM` from the local marketplace.
+Then confirm `APAM` is enabled in the local marketplace.
 
 Codex app:
 
 1. Open the Plugins browser.
 2. Change the source filter from `Built by OpenAI` to `APAM Local Plugins`.
-3. Install or enable `APAM`.
+3. Confirm `APAM` is enabled.
 
 Codex session workflow:
 

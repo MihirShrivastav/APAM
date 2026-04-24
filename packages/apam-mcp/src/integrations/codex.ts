@@ -194,6 +194,9 @@ export function buildCodexConfig(): string {
 [mcp_servers.apam]
 command = "apam-mcp"
 
+[plugins."apam@apam-local"]
+enabled = true
+
 [[hooks.SessionStart]]
 matcher = "startup|resume"
 hooks = [

@@ -25,6 +25,8 @@ describe('Codex integration', () => {
     const config = readFileSync(configPath, 'utf8');
     expect(config).toContain('[mcp_servers.apam]');
     expect(config).toContain('command = "apam-mcp"');
+    expect(config).toContain('[plugins."apam@apam-local"]');
+    expect(config).toContain('enabled = true');
     expect(config).toContain('[hooks.SessionStart]');
     expect(config).toContain('[hooks.Stop]');
     expect((config.match(/# BEGIN APAM/g) ?? []).length).toBe(1);
