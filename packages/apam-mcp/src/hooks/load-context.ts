@@ -8,7 +8,7 @@ try {
   const dbPath = join(homedir(), '.apam', projectId, 'apam.db');
 
   if (existsSync(dbPath)) {
-    // Output a reminder that will be visible to Claude in the hook feedback
+    // Output a reminder that will be visible in hook feedback.
     process.stdout.write(
       JSON.stringify({
         type: 'apam_context_available',
@@ -18,8 +18,8 @@ try {
     );
   }
 } catch {
-  // Never block a session
+  // Never block a session.
 }
 
-// Always exit 0 — never block a session
+// Always exit 0 - never block a session.
 process.exit(0);

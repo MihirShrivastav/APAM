@@ -1,445 +1,359 @@
-# APAM — Anthropomorphic Procedural Agent Memory for Claude Code
+# APAM
 
-APAM gives Claude Code persistent, structured memory across sessions. Every Claude Code session normally starts blank — no memory of past decisions, architectural context, or user preferences. APAM fixes this.
+**A**nthropomorphic **P**rocedural **A**gent **M**emory, is a persistent, layered memory system for coding agents.
 
-Claude remembers what was worked on, what was decided, what you prefer, and what patterns emerged — across every session, without you briefing it each time.
+It keeps project memory in a local SQLite database and exposes that memory through a shared MCP server, so different agents can work against the same memory store across sessions.
 
----
+APAM now supports:
 
-## How It Works
+- Claude Code through the existing Claude-oriented skill package and Claude hooks
+- Codex through a globally installed Codex plugin, Codex skills, and user-level Codex config
 
-APAM stores memory in three layers in a local SQLite database (`~/.apam/<project-id>/apam.db`):
+The database and MCP runtime are shared. Agent-specific behavior lives in thin integration layers.
 
-| Layer | Name | What it stores | Lifetime |
-|---|---|---|---|
-| **L1** | Fast Recall | User preferences + project index: stack, endpoints, folder structure, constraints | Persistent (evicted only when stale + low-salience) |
-| **L2** | Episodes | Session logs: what was done, decisions made, files changed, plan/doc pointers | Permanent, append-only |
-| **L3** | Project Intelligence | Architecture, patterns, procedures, modules, future plans, enhancement ideas | Written immediately as knowledge is produced; also auto-distilled from episodes |
+## Why APAM
 
-At the start of each session, Claude calls `apam_recall` to load all three layers into context. As work progresses, Claude writes to L1, L2, and L3 proactively — not just at the end.
+APAM is useful when you want project memory to survive across tools, sessions, and context resets.
 
----
+- The memory model, architecture, and interaction patterns stay consistent across Claude Code and Codex.
+- You can move between supported coding agents on the same project without rebuilding project context from scratch each time.
+- New sessions do not have to spend as much time re-reading the repository just to recover the basics.
+- Important decisions, constraints, module knowledge, and recent work can be recalled from local memory instead of being rediscovered repeatedly.
+- Episodic memory preserves what was done, in what order, and why, which helps a new session or a different coding agent understand the sequence of work instead of only the latest state.
+- That episode trail makes it easier to resume interrupted work, understand how a bug or design choice emerged, and avoid repeating investigation that already happened in an earlier session.
+- Across multiple coding agents, episodic memory improves handoffs because one agent can see what another agent changed, decided, or ruled out before continuing.
+- Because the memory store is local and shared, APAM helps maintain continuity while still keeping project data on your own machine.
 
-## Quick Start
+## Memory Model
 
-```bash
-# 1. Clone and build
-git clone https://github.com/MihirShrivastav/APAM.git
-cd APAM/packages/apam-mcp && npm install && npm run build && npm link
+APAM stores memory in `~/.apam/<project-id>/apam.db`.
 
-# 2. Register MCP server (add to ~/.claude/settings.json)
-# See Installation section for the JSON
+| Layer | Purpose |
+| --- | --- |
+| `L1` | Fast recall atoms: preferences, project facts, constraints, decisions |
+| `L2` | Session episodes: summaries, files touched, decisions, solved problems |
+| `L3` | Project intelligence: architecture, patterns, procedures, modules |
 
-# 3. Install the skill plugin
-claude plugin marketplace add /path/to/APAM/packages/apam-skill
-claude plugin install apam@apam
+Project IDs are derived from the git remote when available, otherwise from the absolute directory path.
 
-# 4. Initialise for your project (run from inside the project)
-apam init
-```
+For agent workflows, the authoritative way to resolve the current repository's `project_id` is to run `apam status` from that repository and copy the exact `Project:` value. Do not rely on MCP `apam_status` auto-detection in a long-lived agent session, because the server process may be running from a different current working directory.
 
-Then in Claude Code:
-- Start any session: `/apam:apam-fetch`
-- First session in a new project: `/apam:apam-init`
-- After building something: `/apam:apam-update`
+## Provenance
 
----
+APAM is now provenance-aware.
 
-## Slash Commands
+- L1 atoms store `source_agent`
+- L2 episodes store `agent_name`
+- L3 cards store `created_by_agent` and `updated_by_agent`
+- Inferred facts now use `confidence = "agent_inferred"` instead of `claude_inferred`
 
-Once the plugin is installed, five commands are available in Claude Code. [Full reference below.](#slash-commands-1)
+Existing Claude-era databases are migrated automatically. Legacy `claude_inferred` rows are rewritten to `agent_inferred`, and migrated rows are backfilled with `claude-code` provenance.
 
-| Command | When to use |
-|---|---|
-| `/apam:apam-fetch` | **Start of any session** — loads all memory, Claude knows the project |
-| `/apam:apam-init` | **First session in a new project** — explores codebase, writes initial memory |
-| `/apam:apam-update` | **After meaningful work** — saves what was built, decided, or learned |
-| `/apam:apam-consolidate` | **Manual distillation** — extracts L3 records from episode history |
-| `/apam:apam` | Full policy reference |
+## Repository Layout
 
-**Typical workflow:**
-1. Open a project → `/apam:apam-fetch`
-2. Do work
-3. `/apam:apam-update`
-
----
-
-## Architecture
-
-```
-Claude Code Session
-│
-├── APAM Skill (plugin — packages/apam-skill/)
-│   ├── /apam:apam-fetch       — load project memory
-│   ├── /apam:apam-init        — bootstrap memory for new project
-│   ├── /apam:apam-update      — save session work to memory
-│   ├── /apam:apam-consolidate — distil episodes into L3
-│   └── /apam:apam             — full policy reference
-│
-├── Claude Code Hooks (written to ~/.claude/settings.json by apam init)
-│   ├── PreToolUse → apam-load-context   (reminds Claude to call apam_recall)
-│   └── Stop       → apam-write-episode  (fallback episode writer at session end)
-│
-└── APAM MCP Server  (apam-mcp)
-    ├── apam_status               — auto-detects project from cwd, returns project_id
-    ├── apam_recall               — load L1 + L3 + recent L2 for a project
-    ├── apam_pin                  — write a fact to L1 fast recall
-    ├── apam_update_intelligence  — write directly to L3 Project Intelligence
-    ├── apam_write_episode        — log a session episode to L2
-    └── apam_consolidate          — distil L2 episodes into L3
-         │
-         └── SQLite: ~/.apam/<project-id>/apam.db
-```
-
----
+- `packages/apam-mcp`
+  Shared MCP server, CLI, SQLite schema, consolidation logic, and integration writers
+- `packages/apam-skill`
+  Claude-oriented APAM skill package
+- `~/plugins/apam`
+  Home-level Codex plugin with Codex-native APAM skills
+- `~/.agents/plugins/marketplace.json`
+  Home-level Codex marketplace entry for the APAM plugin
+- `~/.codex/config.toml`
+  User-level Codex MCP and hook configuration
 
 ## Prerequisites
 
-- Node.js 18+
-- Claude Code CLI or desktop app
-- Superpowers plugin installed in Claude Code
+Before installing APAM, make sure you have:
 
----
+- Git installed so you can clone or pull the repository
+- Node.js installed
+- npm available on your PATH
+
+APAM is implemented in TypeScript/Node.js and builds to a Node-based MCP server and CLI.
+
+Recommended baseline:
+
+- Node.js 18 or newer
+
+Official downloads and docs:
+
+- Node.js: `https://nodejs.org/`
+- Git: `https://git-scm.com/downloads`
 
 ## Installation
 
-### 1. Clone the repo and build
+The clean mental model is:
+
+1. Do the shared APAM install once on your machine.
+2. Add Claude support and/or Codex support once on your machine.
+3. In each repository you want APAM to track, run `apam init`.
+
+### 1. Shared APAM install
+
+First, get the repository onto your machine and make sure it is up to date.
+
+If you do not have the repo yet:
 
 ```bash
 git clone https://github.com/MihirShrivastav/APAM.git
-cd APAM/packages/apam-mcp
-npm install
-npm run build
+cd APAM
 ```
 
-### 2. Link the CLI globally
+If you already have the repo:
 
 ```bash
+cd /path/to/APAM
+git pull
+```
+
+Then build and link the shared MCP package once:
+
+```bash
+cd packages/apam-mcp
+npm install
+npm run build
 npm link
+npm test
 ```
 
-This makes the `apam`, `apam-mcp`, `apam-load-context`, and `apam-write-episode` binaries available on your PATH.
+`npm link` is the recommended path because it makes these commands available globally:
 
-### 3. Register the MCP server with Claude Code
+- `apam`
+- `apam-mcp`
+- `apam-load-context`
+- `apam-write-episode`
 
-Add an `mcpServers` entry to your Claude Code settings file:
+Manual startup command for the shared MCP server, useful only for debugging or direct local testing:
 
-- **Mac/Linux (CLI):** `~/.claude/settings.json`
-- **Windows (CLI):** `%USERPROFILE%\.claude\settings.json`
-- **Desktop app:** `~/.claude/claude_desktop_config.json` (Mac/Linux) or `%USERPROFILE%\.claude\claude_desktop_config.json` (Windows)
-
-```json
-{
-  "mcpServers": {
-    "apam": {
-      "command": "apam-mcp"
-    }
-  }
-}
+```bash
+cd packages/apam-mcp
+npx apam-mcp
 ```
 
-If you skipped `npm link`, use the full path to the built file instead:
+After linking or running the built package, APAM exposes:
+
+```bash
+apam init
+apam integrate claude
+apam integrate codex
+apam integrate all
+apam status
+apam consolidate
+apam forget <card-id>
+```
+
+What the shared commands do:
+
+- `apam init`
+  Derives the project ID for the current repository and creates or opens the local APAM database for that project.
+- `apam integrate claude`
+  Adds Claude-specific APAM hooks in `~/.claude/settings.json`.
+- `apam integrate codex`
+  Adds Codex-specific APAM config, local marketplace metadata, and generated plugin files under your home directory.
+
+### 2. Claude global setup
+
+Do this once per machine if you want APAM in Claude Code.
+
+Register the APAM MCP server with Claude:
 
 ```json
 {
   "mcpServers": {
     "apam": {
       "command": "node",
-      "args": ["/path/to/APAM/packages/apam-mcp/dist/server.js"]
+      "args": ["/absolute/path/to/APAM/packages/apam-mcp/dist/server.js"]
     }
   }
 }
 ```
 
-### 4. Install the APAM skill plugin
+If you are relying on the linked `apam-mcp` binary, keep using that installed binary for normal usage. The JSON above is the direct-path fallback when you want Claude to point at the built server explicitly.
+
+Install the Claude APAM skill package:
 
 ```bash
-# Register the plugin directory as a local marketplace (once)
-claude plugin marketplace add /path/to/APAM/packages/apam-skill
-
-# Install the plugin
+claude plugin marketplace add /absolute/path/to/APAM/packages/apam-skill
 claude plugin install apam@apam
 ```
 
-Replace `/path/to/APAM` with the actual path where you cloned the repo.
-
-Verify the install:
+Then enable the Claude-side APAM hooks:
 
 ```bash
-claude plugin list
-# apam should appear in the output
+apam integrate claude
 ```
 
-> **Note:** The marketplace registration points at your local clone. If you move the repo, re-run `claude plugin marketplace add` with the new path and reinstall.
+What Claude integration writes:
 
-### 5. Initialise for your project
+- `PreToolUse` hook for `apam-load-context`
+- `Stop` hook for `apam-write-episode --agent claude-code`
 
-Run this once from inside your project directory:
+Claude session workflow:
+
+- first step in a project session: `/apam:apam-status`
+- first session in a project: `/apam:apam-init`
+- start of a normal session: `/apam:apam-fetch`
+- after meaningful work: `/apam:apam-update`
+- manual distillation: `/apam:apam-consolidate`
+
+Claude should use `/apam:apam-status` or local `apam status` output to fetch the exact `project_id`, then pass that value explicitly into APAM MCP tool calls.
+
+### 3. Codex global setup
+
+Do this once per machine if you want APAM in Codex.
+
+Install Codex integration:
+
+```bash
+apam integrate codex
+```
+
+If you skipped `npm link`, use the built CLI directly instead:
+
+```bash
+node /absolute/path/to/APAM/packages/apam-mcp/dist/cli.js integrate codex
+```
+
+What Codex integration writes:
+
+- `~/.codex/config.toml`
+- `~/.agents/plugins/marketplace.json`
+- `~/plugins/apam/.codex-plugin/plugin.json`
+- `~/plugins/apam/skills/*`
+
+The generated Codex config expects these commands to exist by name:
+
+- `apam-mcp`
+- `apam-load-context`
+- `apam-write-episode`
+
+That is why the `npm link` flow is the recommended day-to-day install path.
+
+After running `apam integrate codex`, install or enable the APAM plugin from either Codex surface.
+
+Codex CLI:
+
+```text
+/plugins
+```
+
+Then install or enable `APAM` from the local marketplace.
+
+Codex app:
+
+1. Open the Plugins browser.
+2. Change the source filter from `Built by OpenAI` to `APAM Local Plugins`.
+3. Install or enable `APAM`.
+
+Codex session workflow:
+
+- `$apam`
+- `$apam-status`
+- `$apam-fetch`
+- `$apam-init`
+- `$apam-update`
+- `$apam-consolidate`
+
+Codex may also surface enabled skills in slash lists depending on the client surface.
+
+Codex should use `$apam-status` or local `apam status` output to fetch the exact `project_id`, then pass that value explicitly into APAM MCP tool calls.
+
+The generated `~/.codex/config.toml` also configures:
+
+- APAM MCP access for all Codex sessions
+- `SessionStart` hook to remind Codex that APAM memory exists
+- `Stop` hook to write a fallback episode with `agent_name = "codex"` if nothing was written recently
+
+### 4. Per-repository setup
+
+After the shared install and whichever agent integration you want are already set up, each repository only needs:
 
 ```bash
 apam init
 ```
 
-This:
-- Derives a project ID from your git remote URL (or directory path if no remote)
-- Creates the SQLite database at `~/.apam/<project-id>/apam.db`
-- Writes the hook entries into `~/.claude/settings.json`
-
-Restart Claude Code after running `apam init` for the hooks to take effect.
-
----
-
-## Verification
+If you skipped `npm link`, use the built CLI directly instead:
 
 ```bash
-# From your project directory
-apam status
+node /absolute/path/to/APAM/packages/apam-mcp/dist/cli.js init
 ```
 
-Expected output on a fresh project:
-
-```
-## APAM Memory Status
-Project: a1b2c3d4e5f6a7b8
-L1 atoms: 0 project-scoped, 0 global
-L2 episodes: 0 total, 0 unconsolidated
-L3 Project Intelligence records: 0
-L2 auto-consolidation: every 5 episodes (direct L3 writes via apam_update_intelligence are always immediate)
-Last session: none
-```
-
-Then open Claude Code in the project and run `/apam:apam-init` to bootstrap memory.
-
----
-
-## Slash Commands
-
-These are how you use APAM day-to-day. Type them directly in a Claude Code session.
-
----
-
-### `/apam:apam-fetch` — Load memory at session start
-
-**Type this at the beginning of every session.**
-
-Claude will detect the current project, load everything stored about it, and tell you what it knows. After this, Claude has full context: the tech stack, folder structure, past decisions, recent work, and any architectural knowledge recorded in previous sessions.
-
-```
-You: /apam:apam-fetch
-
-Claude: Loaded memory for project a1b2c3d4...
-  L1 — 5 atoms: Node.js + TypeScript API, PostgreSQL, src/routes + src/models structure,
-       entry point src/index.ts, constraint: no raw SQL (use query builder)
-  L3 — 4 records: System Overview, API Endpoints, Database Schema, Auth Design
-  L2 — last session 3 days ago: implemented user authentication, added JWT middleware
-```
-
-If no memory exists yet for the project, Claude will tell you and suggest running `/apam:apam-init`.
-
----
-
-### `/apam:apam-init` — Bootstrap memory for a new project
-
-**Type this the first time you use APAM in a project.**
-
-Claude will explore the codebase — reading the README, package.json, folder structure, and key source files — and build an initial memory snapshot without you having to explain anything.
-
-What gets written:
-- **L1 atoms** for every indexable project fact: what it is, stack, folder structure, entry points, APIs, database, external services, constraints
-- **L3 Project Intelligence** records for System Overview and Key Modules, plus anything else that's obvious from the code
-
-At the end Claude reports everything it pinned and invites corrections. If something is wrong, just tell it — it will update the atom.
-
----
-
-### `/apam:apam-update` — Save what was built or decided
-
-**Type this after any meaningful work: implementing a feature, making a design decision, fixing a non-trivial bug, or having a significant design discussion.**
-
-Claude reviews the conversation, extracts what was learned or decided, and writes it to memory:
-
-- **L1** — any new project facts (new endpoint added, new dependency, new constraint). Also updates existing atoms if something changed — L1 is kept accurate, not just appended to.
-- **L3 Project Intelligence** — upserts records for architecture discussed, patterns established, plans made, modules documented. Uses consistent titles so records are updated rather than duplicated.
-- **L2 episode** — a structured log of the session: summary, decisions made, files touched, problems solved, patterns observed.
-
-You can run this multiple times in one session if distinct chunks of work were done.
-
-```
-You: /apam:apam-update
-
-Claude: Saved:
-  L1 — updated "MCP tools" atom (added apam_update_intelligence)
-       pinned new atom: "Slash commands: /apam:apam-fetch, /apam:apam-init..."
-  L3 — updated "Key Decisions" (v2), updated "MCP Tools" (v2), created "Skill Commands" (v1)
-  L2 — episode written: "Fixed apam_status auto-detection, added 4 slash commands, rewrote README"
-```
-
----
-
-### `/apam:apam-consolidate` — Distil episode history into L3
-
-**Type this after several sessions have accumulated, or before starting a new phase of work.**
-
-Claude reads all unconsolidated L2 episodes and extracts durable knowledge into L3 Project Intelligence records: architectural decisions, recurring patterns, problems solved, and modules that keep getting touched. This is a background enrichment step — direct L3 writes from `/apam:apam-update` are always more current.
-
-Check `apam status` to see how many unconsolidated episodes are queued before running this.
-
----
-
-### `/apam:apam` — Full policy reference
-
-The complete memory policy document: all three layers explained, session protocols, L1 population checklist, memory hygiene rules. Use this when you want to understand or tune how Claude handles memory in detail.
-
----
-
-## CLI Reference
-
-```bash
-apam init              # Initialise project, create DB, write hooks to ~/.claude/settings.json
-apam status            # Show memory counts for the current project (auto-detects from cwd)
-apam consolidate       # Manually trigger L3 consolidation
-apam forget <card-id>  # Delete a Project Intelligence record by ID
-```
-
----
+This creates or opens the APAM database for the current repository. After that, Claude Code or Codex can use the APAM skills for that repo.
 
 ## MCP Tools
 
-These are called by Claude automatically when slash commands run. Listed here for reference — you do not need to invoke them directly.
+These are the shared APAM tools exposed by `packages/apam-mcp/src/server.ts`.
 
-| Tool | What it does |
-|---|---|
-| `apam_status` | Returns project_id + memory counts. Call with no arguments — auto-detects from cwd. |
-| `apam_recall` | Loads L1 + L3 + last 2 L2 episodes for a project. |
-| `apam_pin` | Writes or updates an L1 fast recall atom. |
-| `apam_update_intelligence` | Upserts an L3 Project Intelligence record by title. |
-| `apam_write_episode` | Appends an L2 session episode. |
-| `apam_consolidate` | Distils unconsolidated L2 episodes into L3. |
+| Tool | Purpose |
+| --- | --- |
+| `apam_status` | Report memory counts for a supplied `project_id`, or auto-detect from the server process cwd when no `project_id` is supplied |
+| `apam_recall` | Load L1, L3, and recent L2 episodes |
+| `apam_pin` | Write or update a fast-recall atom |
+| `apam_update_intelligence` | Write or update an L3 intelligence card |
+| `apam_write_episode` | Record an L2 episode |
+| `apam_consolidate` | Distill unconsolidated L2 episodes into L3 |
 
----
+For Claude Code and Codex agent sessions, prefer local `apam status` for project discovery and then pass the exact `project_id` into MCP tool calls explicitly. The no-argument `apam_status` MCP path is only reliable when the MCP server itself is running with the target repository as its cwd.
 
-## What Claude Stores in L1
+### Provenance-aware MCP fields
 
-L1 is a **project index**, not just a preferences store.
+The following tools now accept optional `agent_name`:
 
-**Global (all projects)**
-- User preferences and communication style
-- Workflow preferences ("always run tests before committing", "use tabs")
+- `apam_pin(..., agent_name?: string)`
+- `apam_write_episode(..., agent_name?: string)`
+- `apam_update_intelligence(..., agent_name?: string)`
 
-**Project-specific**
-- What the project is and what problem it solves
-- Tech stack: languages, frameworks, key libraries
-- Folder structure: where src, tests, and config live
-- Entry points: main file, CLI, server start command
-- APIs and endpoints: names and one-line purpose
-- Database and data models: what DB, what main schemas
-- Key external services or integrations
-- Active constraints ("never expose X", "always go through Y")
+Expected values today:
 
----
+- `claude-code`
+- `codex`
 
-## Memory Lifecycle
+## Verification
 
-```
-Session starts
-  └── /apam:apam-fetch → apam_recall → loads L1 + L3 + last 2 episodes
-
-New project, no memory
-  └── /apam:apam-init
-      ├── Explores codebase (README, package.json, folder structure)
-      ├── Pins project facts to L1 (stack, structure, endpoints, constraints)
-      └── Writes initial L3 Project Intelligence (System Overview, Key Modules)
-
-During session (as knowledge is produced)
-  ├── apam_pin                 — new fact about project or user preference
-  ├── apam_update_intelligence — architecture discussed, API designed, plan created
-  └── apam_write_episode       — meaningful chunk of work done (multiple per session ok)
-
-After work
-  └── /apam:apam-update → writes pending L1/L3, logs L2 episode
-
-Every 5 unconsolidated episodes (background)
-  └── apam_consolidate → distils decisions/patterns/problems → L3 Project Intelligence
-```
-
----
-
-## L3 Project Intelligence
-
-L3 is the durable knowledge layer. Claude writes to it directly via `apam_update_intelligence` the moment knowledge is produced — not deferred to session end.
-
-Records are **upserted by title** — "API Endpoints" always updates the same record. Direct writes and periodic consolidation both feed into it.
-
-**Periodic consolidation** (every 5 episodes) automatically extracts:
-
-| Record type | Source field | Title |
-|---|---|---|
-| `architecture` | `decisions[]` from episodes | "Key Decisions" |
-| `pattern` | `patterns_observed[]` from episodes | "Observed Patterns" |
-| `procedural` | `problems_solved[]` from episodes | "Problems Solved" |
-| `entity` | Files touched in ≥ 2 episodes | "Module: \<dir\>" |
-
-Run consolidation manually at any time:
+From any initialized project, verify project detection with:
 
 ```bash
-apam consolidate
-# or in Claude Code:
-/apam:apam-consolidate
+apam status
 ```
 
----
-
-## Hooks Behaviour
-
-`apam init` writes two hooks into `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [{
-      "matcher": ".*",
-      "hooks": [{ "type": "command", "command": "apam-load-context" }]
-    }],
-    "Stop": [{
-      "hooks": [{ "type": "command", "command": "apam-write-episode" }]
-    }]
-  }
-}
-```
-
-- **`apam-load-context`** — fires before every tool call. If the project DB exists, outputs a message reminding Claude to call `apam_recall`. Always exits 0.
-- **`apam-write-episode`** — fires when Claude finishes responding. If an episode was already written in the last 10 minutes, this is a no-op. Otherwise writes a minimal fallback episode with git context. Always exits 0.
-
-The slash commands are the primary interface. The hooks act as a safety net for sessions where the commands weren't used.
-
----
-
-## Data Storage
-
-All data is stored locally. Nothing leaves your machine.
-
-```
-~/.apam/
-└── <project-id>/      # 16-char hex derived from git remote URL
-    └── apam.db        # SQLite database (WAL mode)
-```
-
-`~` is `$HOME` on Mac/Linux and `%USERPROFILE%` on Windows.
-
-**Project ID derivation:**
-1. SHA256 of the normalised git remote URL (strips protocol, `.git`, trailing slash) → first 16 hex chars
-2. Falls back to SHA256 of the absolute directory path if no git remote exists
-
----
-
-## Development
+If you skipped `npm link`, run:
 
 ```bash
-cd packages/apam-mcp
-npm install
-npm test          # vitest — all tests use in-memory SQLite
-npm run build     # compile TypeScript to dist/
+node /absolute/path/to/APAM/packages/apam-mcp/dist/cli.js status
 ```
 
-Tests: 30 tests across 9 files, all in-memory SQLite.
+For Claude, confirm the MCP server registration and APAM hooks are present in your Claude settings.
 
+For global Codex integration:
+
+macOS/Linux:
+
+```bash
+cat ~/.codex/config.toml
+cat ~/.agents/plugins/marketplace.json
+cat ~/plugins/apam/.codex-plugin/plugin.json
+```
+
+Windows PowerShell:
+
+```powershell
+Get-Content $HOME\.codex\config.toml
+Get-Content $HOME\.agents\plugins\marketplace.json
+Get-Content $HOME\plugins\apam\.codex-plugin\plugin.json
+```
+
+Then:
+
+1. In Codex CLI, run `/plugins` and confirm `APAM` is installed or enabled.
+2. Or in the Codex app, open the Plugins browser, choose `APAM Local Plugins`, and confirm `APAM` is installed or enabled.
+3. In the target repository, run `apam status` and confirm the `Project:` value is stable.
+4. Invoke `$apam-status`, `$apam-fetch`, or `$apam-init` in Codex, or `/apam:apam-status` and `/apam:apam-fetch` in Claude.
+
+## Development Notes
+
+- `packages/apam-mcp/tests/db/migration.test.ts` covers legacy-to-provenance migration
+- `packages/apam-mcp/tests/integrations/claude.test.ts` covers Claude settings writes
+- `packages/apam-mcp/tests/integrations/codex.test.ts` covers Codex config, marketplace, and plugin generation
+
+All APAM data stays local to the machine running the MCP server.
