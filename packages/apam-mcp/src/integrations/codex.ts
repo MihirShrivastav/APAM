@@ -194,15 +194,13 @@ export function buildCodexConfig(): string {
 [mcp_servers.apam]
 command = "apam-mcp"
 
-[hooks]
-
-[hooks.SessionStart]
+[[hooks.SessionStart]]
 matcher = "startup|resume"
 hooks = [
   { type = "command", command = "apam-load-context", statusMessage = "Checking APAM memory" }
 ]
 
-[hooks.Stop]
+[[hooks.Stop]]
 hooks = [
   { type = "command", command = "apam-write-episode --agent codex", timeout = 30 }
 ]
