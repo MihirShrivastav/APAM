@@ -264,7 +264,7 @@ Codex should use `$apam-status` or local `apam status` output to fetch the exact
 The generated `~/.codex/config.toml` also configures:
 
 - APAM MCP access for all Codex sessions
-- `SessionStart` hook to remind Codex that APAM memory exists
+- `SessionStart` hook that returns Codex-compatible `hookSpecificOutput.additionalContext` reminding Codex that APAM memory exists
 - `Stop` hook to write a fallback episode with `agent_name = "codex"` if nothing was written recently
 
 ### 4. Per-repository setup
